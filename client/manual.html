@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style type="text/css">
+video{
+  height: 160px;
+}
+textarea {
+  width: 480px;
+  height: 180px;
+}
+    </style>
+    <script src="https://code.jquery.com/jquery-2.2.2.min.js" integrity="sha256-36cp2Co+/62rEAAYHLmRCPIych47CvdM+uTBJwSzWjI=" crossorigin="anonymous"></script>
+    <script type="text/javascript">
+var peer = null;
+$(function(){
+  $('#step1').click(function(){
+    if (peer) {
+      return;
+    }
+    // ピアを作る
+    peer = new webkitRTCPeerConnection({
+      "iceServers": [{"url": "stun:stun.l.google.com:19302"}]
+    });
+    
+    var candidate = [];
+    // 接続候補の情報を取得するコールバック
+    peer.onicecandidate = function(event) {
+      console.log(event);
+      if (event.candidate) {
+        candidate.push(event.candidate);
+        $('#localCandidate').val(JSON.stringify(candidate));
+      }
+    };
+    
+    // ストリームが追加された際のコールバック
+    peer.onaddstream = function(mediaStream) {
+      var video = $('#remoteVideo');
+      console.log(video, mediaStream);
+      video.attr('src', window.URL.createObjectURL(mediaStream.stream));
+      alert('ストリームが追加されました');
+    }
+  });
+  
+  $('#step2').click(function(){
+    // カメラ、音声のメディアストリーム取得
+    navigator.webkitGetUserMedia(
+      {
+        audio: true,
+        video: true
+      },
+      function(mediaStream) {
+        // videoタグに映像を映す
+        var video = $('#localVideo');
+        console.log(mediaStream);
+        video.attr('src', window.URL.createObjectURL(mediaStream));
+        // ピアにメディアストリームを設定する
+        peer.addStream(mediaStream);
+      },
+      function(err) {
+        console.log(err.name + ': ' + err.message);
+        alert("メディアストリームの取得に失敗しました:" + err.message);
+      }
+    );
+  });
+  
+  $('#step3').click(function(){
+    // 相手に渡すSDPを作る
+    peer.createOffer(function(sdp) {
+      // ピアに自分のSDPを設定する
+      peer.setLocalDescription(sdp, function(){
+        $('#localSdp').val(JSON.stringify(sdp));
+      });
+    });
+  });
+  
+  $('#step4').click(function(){
+    // 相手からもらったSDPをピアに設定する
+    var sdp = new RTCSessionDescription(JSON.parse($('#remoteSdp').val()));
+    peer.setRemoteDescription(sdp, function() {
+      
+    });
+  });
+  
+  $('#step5').click(function(){
+    // 応答用のSDPを作る
+    peer.createAnswer(function(sdp) {
+      // ピアに自分のSDPを設定する
+      peer.setLocalDescription(sdp, function() {
+        $('#localSdp').val(JSON.stringify(sdp));
+      });
+    });
+  });
+  
+  $('#step6').click(function(){
+    // 相手からもらったSDPをピアに設定する
+    var sdp = new RTCSessionDescription(JSON.parse($('#remoteSdp').val()));
+    peer.setRemoteDescription(sdp, function() {
+      
+    });
+  });
+  
+  $('#step7').click(function(){
+    // 相手からもらった接続候補の情報をピアに設定する
+    var remoteCandidates = JSON.parse($('#remoteCandidate').val());
+    for(var i = 0;i<remoteCandidates.length;i++){
+      var candidate = new RTCIceCandidate(remoteCandidates[i]);
+      peer.addIceCandidate(candidate);
+    }
+  });
+});
+    </script>
+</head>
+<body>
+  <h2>WebRTCサンプル(手動でシグナリング)</h2>
+  <table border="1">
+    <tr>
+      <th></th>
+      <th>ローカル</th>
+      <th>リモート</th>
+    </tr>
+    <tr>
+      <th>メディア</th>
+      <td><video id="localVideo" muted="muted" autoplay ></video></td>
+      <td><video id="remoteVideo" autoplay></video></td>
+    </tr>
+    <tr>
+      <th>SDP</th>
+      <td><textarea id="localSdp"></textarea></td>
+      <td><textarea id="remoteSdp"></textarea></td>
+    </tr>
+    <tr>
+      <th>候補</th>
+      <td><textarea id="localCandidate"></textarea></td>
+      <td><textarea id="remoteCandidate"></textarea></td>
+    </tr>
+    <tr>
+      <td colspan="3">
+        <button id="step1">1 【両方】ピアを作る</button><br/>
+        <button id="step2">2 【両方】メディアストリームを作る</button><br/>
+        <button id="step3">3 【発信側】相手に渡すSDPを作る</button><br/>
+        <button id="step4">4 【着信側】相手からもらったSDPをセットする</button><br/>
+        <button id="step5">5 【着信側】相手へ答えるSDPを作る</button><br/>
+        <button id="step6">6 【発信側】相手が答えたSDPをセットする</button><br/>
+        <button id="step7">7 【両方】相手の候補をセットする</button><br/>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

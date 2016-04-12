@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style type="text/css">
+video#remoteVideo {
+  width: 50%; 
+}
+
+video#localVideo {
+  width: 25%; 
+}
+
+textarea {
+  width: 480px;
+  height: 180px;
+}
+    </style>
+    <script src="https://code.jquery.com/jquery-2.2.2.min.js" integrity="sha256-36cp2Co+/62rEAAYHLmRCPIych47CvdM+uTBJwSzWjI=" crossorigin="anonymous"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="text/javascript">
+
+$(function(){
+  var peer = null; // ピアコネクション
+  var socket = null; // WebSockt(Socket.IO)
+  var myCandidate = []; // 自分の接続候補情報
+  var target = null; // 通話相手
+  var isCaller = false; // 発信元かどうか
+
+  // ユーザ名を入力させる
+  var user = prompt('ユーザ名を入力してください', '');
+
+  // WebSocket接続
+  socket = io.connect();
+  
+  // WebSocket接続完了イベント
+  socket.on('connect', function() {
+    socket.emit('login',{user: user});
+    $('#message').text(user + 'さん、こんにちは');
+  });
+  
+  // WebSocketメッセージ受信イベント
+  socket.on('message', function(data){
+    console.log(data);
+    // エラーメッセージ
+    if (data.error) {
+      $('#message').text(data.error);
+      return;
+    }
+    
+    if (data.type == 'call') {
+      // 着信
+      target = data.from;
+      $('#message').text(data.from + 'さんから着信です');
+      var sdp = new RTCSessionDescription(JSON.parse(data.sdp));
+      peer.setRemoteDescription(sdp, function() {
+        $('#accept').prop('disabled', false);
+        socket.emit('message',{
+          type: 'response',
+          to: target,
+          from: user,
+          message: 'ringing'
+        });
+      });
+    } else if (data.type == 'response') {
+      // 一時応答
+      if (data.message == 'ringing') {
+        $('#message').text(target + 'さんを呼び出し中');
+      }
+    } else if (data.type == 'accept') {
+      // 応答
+      var sdp = new RTCSessionDescription(JSON.parse(data.sdp));
+      peer.setRemoteDescription(sdp, function() {
+        socket.emit('message',{
+          type: 'establish',
+          to: target,
+          from: user,
+          candidate: JSON.stringify(myCandidate)
+        });
+      });
+    } else if (data.type == 'establish') {
+      // 接続確立
+      $('#message').text(target + 'さんと通話中...');
+      
+      var remoteCandidates = JSON.parse(data.candidate);
+      for(var i = 0;i<remoteCandidates.length;i++){
+        var candidate = new RTCIceCandidate(remoteCandidates[i]);
+        peer.addIceCandidate(candidate);
+      }
+      
+      if (!isCaller) {
+        socket.emit('message',{
+          type: 'establish',
+          to: target,
+          from: user,
+          candidate: JSON.stringify(myCandidate)
+        });
+      }
+    }
+  });
+  
+  // ピアコネクション生成
+  peer = new webkitRTCPeerConnection({
+    "iceServers": [{"url": "stun:stun.l.google.com:19302"}]
+  });
+
+  // 接続候補情報イベント
+  peer.onicecandidate = function(event) {
+    if (event.candidate) {
+      myCandidate.push(event.candidate);
+    }
+  };
+  
+  // ストリーム追加イベント
+  peer.onaddstream = function(mediaStream) {
+    var video = $('#remoteVideo');
+    video.attr('src', window.URL.createObjectURL(mediaStream.stream));
+  }
+  
+  // カメラ、マイクの取得
+  navigator.webkitGetUserMedia(
+    {
+      audio: true,
+      video: true
+    },
+    function(mediaStream) {
+      // videoタグに映像を映す
+      var video = $('#localVideo');
+      video.attr('src', window.URL.createObjectURL(mediaStream));
+      // ピアにメディアストリームを設定する
+      peer.addStream(mediaStream);
+    },
+    function(err) {
+      console.log(err.name + ': ' + err.message);
+      alert("メディアストリームの取得に失敗しました:" + err.message);
+    }
+  );
+
+  // Callボタン押下時
+  $('#call').click(function(){
+    isCaller = true;
+    target = $('#toUser').val();
+    peer.createOffer(function(sdp) {
+      peer.setLocalDescription(sdp, function(){
+        socket.emit('message',{
+          type: 'call',
+          to: target,
+          from: user,
+          sdp: JSON.stringify(sdp)
+        });
+      });
+    });
+  });
+  
+  // Acceptボタン押下時
+  $('#accept').click(function(){
+    isCaller = false;
+    peer.createAnswer(function(sdp) {
+      peer.setLocalDescription(sdp, function(){
+        socket.emit('message',{
+          type: 'accept',
+          to: target,
+          from: user,
+          sdp: JSON.stringify(sdp)
+        });
+      });
+    });
+  });
+});
+    </script>
+</head>
+<body>
+  <div id="message"></div>
+  <div>
+    <video id="remoteVideo" autoplay></video>
+    <video id="localVideo" autoplay muted></video>
+  </div>
+  <div>
+    <input type="text" id="toUser"><button id="call">CALL</button>
+    <button id="accept">Accept</button>
+  </div>
+</body>
+</html>
