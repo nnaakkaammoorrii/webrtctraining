@@ -4,6 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, shrink-to-fit=no">
     <style type="text/css">
+body {
+  background-color: #008cea;
+  color: #FFFFFF;
+  font-size: 150%;
+}
+button {
+  background-color: #FFFFFF;
+}
+
+input {
+}
+
 video#remoteVideo {
   width: 50%; 
 }
@@ -177,7 +189,8 @@ $(function(){
     <video id="localVideo" autoplay muted></video>
   </div>
   <div>
-    <input type="text" id="toUser"><button id="call">CALL</button>
+    <input type="text" id="toUser" placeholder="相手の名前を入れてください">
+    <button id="call">CALL</button>
     <button id="accept">Accept</button>
   </div>
 </body>
